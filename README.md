@@ -1,9 +1,8 @@
-# `hui` - A visual alternative to `history`
+# `hui` - A visual alternative to `history` written in Rust
 
 <img src="./assets/hui_demo.gif" alt="Demo of hui">
 
 ## Overview
-
 
 `hui` is command-line tool to quickly search through your terminal history. The motivation behind this tool was having a prettier and faster way to do `history | grep <search>`. I would do this frequently to remember some `docker` or `curl`
 command I had done recently, but couldn't remember the flags I used. This now lets me search through my history and copy the command I want a lot easier.
@@ -17,21 +16,18 @@ command I had done recently, but couldn't remember the flags I used. This now le
 If you are on a Mac, you can install from `homebrew`:
 
 ```bash
+brew tap jmwoliver/hui
 brew install hui
 ```
 
-If you're on Ubuntu, you can install using `apt`:
-
-```bash
-apt install hui
-```
-
-If you would like to install from source:
+Alternatively, you would like to install from source if you have `cargo` installed locally:
 
 ```bash
 git clone https://github.com/jmwoliver/hui.git
 cd hui
-cargo build
+cargo build --release
+# you can then alias the command so it is available in any directory:
+# alias hui=<CURRENT_DIR>/target/release/hui
 ```
 
 ### Configuration
