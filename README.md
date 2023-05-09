@@ -48,21 +48,20 @@ echo 'export HUI_TERM="bash"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-!!!
-    Bash doesn't automatically write the history back to the `.bash_history` file like ZSH does. The following can be added to your `.bashrc` file to append the history for each command (based on a [StackExchange response](https://askubuntu.com/a/261411)):
-    ```bash
-    unset HISTFILESIZE
-    HISTSIZE=3000
-    PROMPT_COMMAND="history -a"
-    export HISTSIZE PROMPT_COMMAND
+Bash doesn't automatically write the history back to the `.bash_history` file like ZSH does. The following can be added to your `.bashrc` file to append the history for each command (based on a [StackExchange response](https://askubuntu.com/a/261411)):
+```bash
+unset HISTFILESIZE
+HISTSIZE=3000
+PROMPT_COMMAND="history -a"
+export HISTSIZE PROMPT_COMMAND
 
-    shopt -s histappend
-    ```
+shopt -s histappend
+```
 
-    Then remember to:
-    ```bash
-    source ~/.bashrc
-    ```
+Then remember to:
+```bash
+source ~/.bashrc
+```
 
 ## Usage
 
