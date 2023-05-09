@@ -378,19 +378,25 @@ mod history {
     pub type History = Vec<String>;
 
     trait FromBytes {
-        fn from_bytes(bytes: Vec<u8>) -> History;
+        fn from_bytes(bytes: Vec<u8>, history_type: String) -> History;
     }
 
     impl FromBytes for History {
-        fn from_bytes(bytes: Vec<u8>) -> History {
+        fn from_bytes(bytes: Vec<u8>, history_type: String) -> History {
             // Split by ": " since that is what is a new line command for ZSH
             // As far as I can tell, Bash automatically makes multiline commands
             // into one line when writing to the .bash_history file? I'd need to
             // look more into that to be sure though.
             let s = std::str::from_utf8(&bytes).unwrap();
-            let pattern = std::str::from_utf8(&[10, 58, 32]).unwrap();
+
+            let pattern: &str;
+            if history_type == "zsh" {
+                pattern = std::str::from_utf8(&[10, 58, 32]).unwrap();
+            } else {
+                pattern = std::str::from_utf8(&[10]).unwrap();
+            }
             s
-                .split(pattern) // split on newline
+                .split(pattern) // split on newline for bash and on "\n: " for zsh
                 .map(|line| String::from_utf8(line.as_bytes().to_vec()).unwrap())
                 .collect()
         }
@@ -413,13 +419,36 @@ mod history {
         let path = Path::new(home_dir.as_str());
         let full_path = path.join(history_file.as_str());
         let contents = fs::read(full_path).expect("Should have been able to read the file");
-        process_history(contents)
+
+        let history_type: String;
+        if history_file.contains(".zsh_history") {
+            history_type = "zsh".to_string()
+        } else if history_file.contains(".bash_history") {
+            history_type = "bash".to_string()
+        } else {
+            println!("Unsupported history type");
+            process::exit(0x0100);
+        }
+        // println!("{:?}", History::from_bytes(contents.clone()).len());
+        // println!("{:?}", path.as_os_str());
+        // println!("{}", history_file);
+        // println!("{}", history_type);
+        process_history(contents, history_type)
     }
 
-    pub fn process_history(history: Vec<u8>) -> History {
-        reverse(remove_duplicates(remove_empty(remove_timestamps(
-            History::from_bytes(unmetafy(history)),
-        ))))
+    pub fn process_history(history: Vec<u8>, history_type: String) -> History {
+
+        // @TODO/improvement I don't like how much I'm passing around zsh/bash, this should become
+        // its zsh/bash interfaces built on top of history as a base.
+        if history_type == "zsh"{
+            return reverse(remove_duplicates(remove_empty(remove_timestamps(
+                History::from_bytes(unmetafy(history), history_type),
+            ))))
+        }
+        reverse(remove_duplicates(remove_empty(
+            History::from_bytes(history, history_type),
+        )))
+
     }
 
     fn unmetafy(mut bytestring: Vec<u8>) -> Vec<u8> {
