@@ -65,5 +65,5 @@ Enjoy!
 I used several projects for inspiration or guidance:
 
 - [ratatui](https://github.com/tui-rs-revival/ratatui): Incredible TUI framework and useful examples
-- [hstr-rs](https://github.com/overclockworked64/hstr-rs/tree/master): Helped me better understand how to injest and parse the `.zsh_history` file
+- [hstr-rs](https://github.com/overclockworked64/hstr-rs/tree/master): Helped me better understand how to ingest and parse the `.zsh_history` file
 - [hoard](https://github.com/Hyde46/hoard): Similar concept to `hui` and I liked how they had the searchbar at the bottom
