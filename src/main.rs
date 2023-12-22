@@ -1,11 +1,11 @@
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, MouseEvent, MouseEventKind, MouseButton, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Span, Spans, Text},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
@@ -13,6 +13,7 @@ use ratatui::{
 };
 use std::{
     env,
+    rc::Rc,
     error::Error,
     io,
     time::{Duration, Instant},
@@ -102,6 +103,7 @@ struct App {
     input_prev: String,
     input_mode: InputMode,
     clipboard: copypasta::ClipboardContext,
+    chunks: Rc<[Rect]>,
 }
 
 impl App {
@@ -114,6 +116,7 @@ impl App {
             input_prev: String::new(),
             input_mode: InputMode::Normal,
             clipboard: ClipboardContext::new().unwrap(),
+            chunks: Rc::new([]),
         }
     }
 
@@ -206,76 +209,116 @@ fn run_app<B: Backend>(
         let timeout = tick_rate
             .checked_sub(last_tick.elapsed())
             .unwrap_or_else(|| Duration::from_secs(0));
-        if crossterm::event::poll(timeout)? {
-            if let Event::Key(key) = event::read()? {
-                match app.input_mode {
-                    InputMode::Normal => match key.code {
-                        KeyCode::Char('/') => {
-                            app.input = "".to_string();
-                            app.input_pos = 0;
-                            app.input_mode = InputMode::Editing;
+        let event = if crossterm::event::poll(timeout)? {
+            // Read the event
+            Some(event::read()?)
+        } else {
+            None
+        };
+        match app.input_mode {
+            InputMode::Normal => {
+                if let Some(Event::Mouse(MouseEvent { kind, column, row, .. })) = event {
+                    match kind {
+                        MouseEventKind::Down(MouseButton::Left) => {
+                                // If you've click within a chunk, check which chunk it is to see which mode to select
+                                if column >= app.chunks[1].x && column < app.chunks[1].x + app.chunks[1].width && row >= app.chunks[1].y && row < app.chunks[1].y + app.chunks[1].height {
+                                app.input = "".to_string();
+                                app.input_pos = 0;
+                                app.input_mode = InputMode::Editing;
+                            }
                         }
-                        KeyCode::Char('q') => {
-                            return Ok("".to_string());
+                        MouseEventKind::ScrollUp => {
+                            app.items.previous()
                         }
-                        KeyCode::Down => app.items.next(),
-                        KeyCode::Up => app.items.previous(),
-                        KeyCode::Enter => {
-                            let index = app.items.selected_index();
-                            let val = match app.items.items.get(index) {
-                                Some(val) => val.to_string(),
-                                None => "".to_string(),
-                            };
-                            // Copy the text to the clipboard before quitting
-                            app.clipboard.set_contents(val.clone()).unwrap();
-                            return Ok(format!("Copied to clipboard: {}", val.to_string()));
+                        MouseEventKind::ScrollDown => {
+                            app.items.next()
                         }
                         _ => {}
-                    },
-                    InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
-                        // @TODO/improvement It would be nice to be able to
-                        // use metacharacters just like in a normal terminal.
-                        // Examples: Opt + Arrows to jump by word
-                        //           Opt + Backspace to delete by word
-                        //           Cmd + Arrows to jump to beginning and end
-                        //           Cmd + Backspace to delete everything
-
-                        KeyCode::Enter | KeyCode::Up | KeyCode::Down => {
-                            app.input_mode = InputMode::Normal;
-                        }
-                        KeyCode::Left => {
-                            if app.input_pos > 0 {
-                                app.input_pos -= 1;
+                    }
+                } else if let Some(Event::Key(key)) = event {
+                    if key.kind == KeyEventKind::Press {
+                        match key.code {
+                            KeyCode::Char('/') => {
+                                app.input = "".to_string();
+                                app.input_pos = 0;
+                                app.input_mode = InputMode::Editing;
                             }
-                        }
-                        KeyCode::Right => {
-                            app.input_pos += 1;
-                            if app.input_pos > app.input.width() as u64 {
-                                app.input_pos = app.input.width() as u64;
+                            KeyCode::Char('q') => {
+                                return Ok("".to_string());
                             }
-                        }
-                        KeyCode::Char(c) => {
-                            app.input.insert(app.input_pos as usize, c);
-                            app.input_pos += 1;
-                        }
-                        KeyCode::Backspace => {
-                            if app.input_pos > 0 && app.input_pos - 1 < app.input.width() as u64{
-                                app.input.remove((app.input_pos as usize) - 1);
-                                app.input_pos -= 1;
+                            KeyCode::Down => app.items.next(),
+                            KeyCode::Up => app.items.previous(),
+                            KeyCode::Enter => {
+                                let index = app.items.selected_index();
+                                let val = match app.items.items.get(index) {
+                                    Some(val) => val.to_string(),
+                                    None => "".to_string(),
+                                };
+                                // Copy the text to the clipboard before quitting
+                                app.clipboard.set_contents(val.clone()).unwrap();
+                                return Ok(format!("Copied to clipboard: {}", val.to_string()));
                             }
+                            _ => {}
                         }
-                        KeyCode::Esc => {
-                            // Empty the input if nothing is done.
-                            app.input.drain(..);
-                            app.input_pos = 0;
-                            app.items = StatefulList::with_items(app.full_history.to_vec());
-                            app.input_mode = InputMode::Normal;
-                        }
-                        _ => {}
-                    },
-                    _ => {}
+                    }
                 }
-            }
+            },
+            InputMode::Editing => {
+                if let Some(Event::Mouse(MouseEvent { kind, column, row, .. })) = event {
+                    match kind {
+                        MouseEventKind::Down(MouseButton::Left) => {
+                            // If you've click within a chunk, check which chunk it is to see which mode to select
+                            if column >= app.chunks[0].x && column < app.chunks[0].x + app.chunks[0].width && row >= app.chunks[0].y && row < app.chunks[0].y + app.chunks[0].height {
+                                app.input_mode = InputMode::Normal;
+                            }
+                        }
+                        _ => {}
+                    }
+                } else if let Some(Event::Key(key)) = event {
+                    // @TODO/improvement It would be nice to be able to
+                    // use metacharacters just like in a normal terminal.
+                    // Examples: Opt + Arrows to jump by word
+                    //           Opt + Backspace to delete by word
+                    //           Cmd + Arrows to jump to beginning and end
+                    //           Cmd + Backspace to delete everything
+                    if key.kind == KeyEventKind::Press {
+                        match key.code {
+                            KeyCode::Enter | KeyCode::Up | KeyCode::Down => {
+                                app.input_mode = InputMode::Normal;
+                            }
+                            KeyCode::Left => {
+                                if app.input_pos > 0 {
+                                    app.input_pos -= 1;
+                                }
+                            }
+                            KeyCode::Right => {
+                                app.input_pos += 1;
+                                if app.input_pos > app.input.width() as u64 {
+                                    app.input_pos = app.input.width() as u64;
+                                }
+                            }
+                            KeyCode::Char(c) => {
+                                app.input.insert(app.input_pos as usize, c);
+                                app.input_pos += 1;
+                            }
+                            KeyCode::Backspace => {
+                                if app.input_pos > 0 && app.input_pos - 1 < app.input.width() as u64{
+                                    app.input.remove((app.input_pos as usize) - 1);
+                                    app.input_pos -= 1;
+                                }
+                            }
+                            KeyCode::Esc => {
+                                // Empty the input if nothing is done.
+                                app.input.drain(..);
+                                app.input_pos = 0;
+                                app.items = StatefulList::with_items(app.full_history.to_vec());
+                                app.input_mode = InputMode::Normal;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            },
         }
         if last_tick.elapsed() >= tick_rate {
             app.on_tick();
@@ -377,6 +420,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     // We can now render the item list
     f.render_stateful_widget(items, chunks[0], &mut app.items.state);
+    app.chunks = Rc::clone(&chunks);
 }
 
 // This uses a lot of what hstr-rs did to parse ZSH history:
