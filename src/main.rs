@@ -22,6 +22,9 @@ use std::{
 use copypasta::{ClipboardContext, ClipboardProvider};
 use unicode_width::UnicodeWidthStr;
 
+use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::skim::SkimMatcherV2;
+
 struct StatefulList<T: Default> {
     state: ListState,
     items: Vec<T>,
@@ -104,6 +107,7 @@ struct App {
     input_mode: InputMode,
     clipboard: copypasta::ClipboardContext,
     chunks: Rc<[Rect]>,
+    fuzzy_matcher: SkimMatcherV2,
 }
 
 impl App {
@@ -117,6 +121,7 @@ impl App {
             input_mode: InputMode::Normal,
             clipboard: ClipboardContext::new().unwrap(),
             chunks: Rc::new([]),
+            fuzzy_matcher: SkimMatcherV2::default(),
         }
     }
 
@@ -126,15 +131,22 @@ impl App {
                 // Only change the item state if the input is being updated. If not,
                 // then no need to keep updating.
                 if self.input_prev != self.input {
-                    // @TODO/improvement add fuzzy searching here so it doesn't have to
-                    // be an exact match. Also make it case insensitive so that I can type
-                    // "curl" or "CURL" and it will show up all results for both either
-                    // way. This is particularly helpful when searching for environment
-                    // variables (e.g. "HUI_TERM") and being able to type "hui" to find
-                    // it.
-                    let mut filtered_history = self.full_history.to_vec();
-                    filtered_history.retain(|line| line.contains(self.input.as_str()));
-                    self.items = StatefulList::with_items(filtered_history);
+
+                    // Fuzzy search the full history and sort by relevance
+                    let full_history = self.full_history.to_vec();
+                    let mut matches: Vec<_> = full_history
+                    .iter()
+                    .filter_map(|s| {
+                        self.fuzzy_matcher.fuzzy_match(s, &self.input)
+                            .map(|score| (score, s))
+                    })
+                    .collect();
+            
+                    // Sort by match score in descending order
+                    matches.sort_by(|(score_a, _), (score_b, _)| score_b.cmp(score_a));
+                    let sorted_matches: Vec<_> = matches.into_iter().map(|(_, s)| s.clone()).collect();
+
+                    self.items = StatefulList::with_items(sorted_matches);
                 }
                 self.input_prev = self.input.to_string();
             }
