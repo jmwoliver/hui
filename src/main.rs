@@ -98,6 +98,7 @@ struct App {
     full_history: Vec<String>,
     items: StatefulList<String>,
     input: String,
+    input_pos: u64,
     input_prev: String,
     input_mode: InputMode,
     clipboard: copypasta::ClipboardContext,
@@ -109,6 +110,7 @@ impl App {
             full_history: history.to_vec(),
             items: StatefulList::with_items(history),
             input: String::new(),
+            input_pos: 0,
             input_prev: String::new(),
             input_mode: InputMode::Normal,
             clipboard: ClipboardContext::new().unwrap(),
@@ -210,6 +212,7 @@ fn run_app<B: Backend>(
                     InputMode::Normal => match key.code {
                         KeyCode::Char('/') => {
                             app.input = "".to_string();
+                            app.input_pos = 0;
                             app.input_mode = InputMode::Editing;
                         }
                         KeyCode::Char('q') => {
@@ -230,11 +233,6 @@ fn run_app<B: Backend>(
                         _ => {}
                     },
                     InputMode::Editing if key.kind == KeyEventKind::Press => match key.code {
-                        // @TODO/improvement it would be nice te be able to
-                        // move the cursor while selecting text, but I haven't
-                        // figured out the best way to place text in the string 
-                        // where the cursor is. So it is getting the boot for now.
-
                         // @TODO/improvement It would be nice to be able to
                         // use metacharacters just like in a normal terminal.
                         // Examples: Opt + Arrows to jump by word
@@ -245,15 +243,31 @@ fn run_app<B: Backend>(
                         KeyCode::Enter | KeyCode::Up | KeyCode::Down => {
                             app.input_mode = InputMode::Normal;
                         }
+                        KeyCode::Left => {
+                            if app.input_pos > 0 {
+                                app.input_pos -= 1;
+                            }
+                        }
+                        KeyCode::Right => {
+                            app.input_pos += 1;
+                            if app.input_pos > app.input.width() as u64 {
+                                app.input_pos = app.input.width() as u64;
+                            }
+                        }
                         KeyCode::Char(c) => {
-                            app.input.push(c);
+                            app.input.insert(app.input_pos as usize, c);
+                            app.input_pos += 1;
                         }
                         KeyCode::Backspace => {
-                            app.input.pop();
+                            if app.input_pos > 0 && app.input_pos - 1 < app.input.width() as u64{
+                                app.input.remove((app.input_pos as usize) - 1);
+                                app.input_pos -= 1;
+                            }
                         }
                         KeyCode::Esc => {
                             // Empty the input if nothing is done.
                             app.input.drain(..);
+                            app.input_pos = 0;
                             app.items = StatefulList::with_items(app.full_history.to_vec());
                             app.input_mode = InputMode::Normal;
                         }
@@ -332,7 +346,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             // Make the cursor visible and ask ratatui to put it at the specified coordinates after rendering
             f.set_cursor(
                 // Put cursor past the end of the input text
-                chunks[1].x + app.input.width() as u16 + 1,
+                chunks[1].x + app.input_pos as u16 + 1,
                 // Move one line down, from the border to the input line
                 chunks[1].y + 1,
             )
