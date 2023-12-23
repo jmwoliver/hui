@@ -390,7 +390,7 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             InputMode::Normal => Style::default(),
             InputMode::Editing => Style::default().fg(select_color),
         })
-        .block(Block::default().borders(Borders::ALL).title("Search"));
+        .block(Block::default().borders(Borders::ALL).title(" search "));
     f.render_widget(input, chunks[1]);
     match app.input_mode {
         InputMode::Normal =>
@@ -416,9 +416,12 @@ fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         .map(|i| ListItem::new(i.to_string()).style(Style::default()))
         .collect();
 
+    // Display the version in the UI
+    let hui_version = " hui v".to_string() + env!("CARGO_PKG_VERSION") + " ";
+
     // Create a List from all list items and highlight the currently selected one
     let items = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("History"))
+        .block(Block::default().borders(Borders::ALL).title(hui_version))
         .highlight_style(match app.input_mode {
             InputMode::Normal => Style::default()
                 .bg(select_color)
