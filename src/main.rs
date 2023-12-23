@@ -1,5 +1,8 @@
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, MouseEvent, MouseEventKind, MouseButton, KeyEventKind, KeyModifiers, KeyEvent},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+        KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -13,17 +16,17 @@ use ratatui::{
 };
 use std::{
     env,
-    rc::Rc,
     error::Error,
     io,
+    rc::Rc,
     time::{Duration, Instant},
 };
 
 use copypasta::{ClipboardContext, ClipboardProvider};
 use unicode_width::UnicodeWidthStr;
 
-use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::FuzzyMatcher;
 
 struct StatefulList<T: Default> {
     state: ListState,
@@ -131,20 +134,21 @@ impl App {
                 // Only change the item state if the input is being updated. If not,
                 // then no need to keep updating.
                 if self.input_prev != self.input {
-
                     // Fuzzy search the full history and sort by relevance
                     let full_history = self.full_history.to_vec();
                     let mut matches: Vec<_> = full_history
-                    .iter()
-                    .filter_map(|s| {
-                        self.fuzzy_matcher.fuzzy_match(s, &self.input)
-                            .map(|score| (score, s))
-                    })
-                    .collect();
-            
+                        .iter()
+                        .filter_map(|s| {
+                            self.fuzzy_matcher
+                                .fuzzy_match(s, &self.input)
+                                .map(|score| (score, s))
+                        })
+                        .collect();
+
                     // Sort by match score in descending order
                     matches.sort_by(|(score_a, _), (score_b, _)| score_b.cmp(score_a));
-                    let sorted_matches: Vec<_> = matches.into_iter().map(|(_, s)| s.clone()).collect();
+                    let sorted_matches: Vec<_> =
+                        matches.into_iter().map(|(_, s)| s.clone()).collect();
 
                     self.items = StatefulList::with_items(sorted_matches);
                 }
@@ -203,7 +207,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             if resp != "" {
                 println!("{}", resp);
             }
-        },
+        }
     }
 
     Ok(())
@@ -250,22 +254,25 @@ fn run_app<B: Backend>(
         };
         match app.input_mode {
             InputMode::Normal => {
-                if let Some(Event::Mouse(MouseEvent { kind, column, row, .. })) = event {
+                if let Some(Event::Mouse(MouseEvent {
+                    kind, column, row, ..
+                })) = event
+                {
                     match kind {
                         MouseEventKind::Down(MouseButton::Left) => {
-                                // If you've click within a chunk, check which chunk it is to see which mode to select
-                                if column >= app.chunks[1].x && column < app.chunks[1].x + app.chunks[1].width && row >= app.chunks[1].y && row < app.chunks[1].y + app.chunks[1].height {
+                            // If you've click within a chunk, check which chunk it is to see which mode to select
+                            if column >= app.chunks[1].x
+                                && column < app.chunks[1].x + app.chunks[1].width
+                                && row >= app.chunks[1].y
+                                && row < app.chunks[1].y + app.chunks[1].height
+                            {
                                 app.input = "".to_string();
                                 app.input_pos = 0;
                                 app.input_mode = InputMode::Editing;
                             }
                         }
-                        MouseEventKind::ScrollUp => {
-                            app.items.previous()
-                        }
-                        MouseEventKind::ScrollDown => {
-                            app.items.next()
-                        }
+                        MouseEventKind::ScrollUp => app.items.previous(),
+                        MouseEventKind::ScrollDown => app.items.next(),
                         _ => {}
                     }
                 } else if let Some(Event::Key(key)) = event {
@@ -295,13 +302,20 @@ fn run_app<B: Backend>(
                         }
                     }
                 }
-            },
+            }
             InputMode::Editing => {
-                if let Some(Event::Mouse(MouseEvent { kind, column, row, .. })) = event {
+                if let Some(Event::Mouse(MouseEvent {
+                    kind, column, row, ..
+                })) = event
+                {
                     match kind {
                         MouseEventKind::Down(MouseButton::Left) => {
                             // If you've click within a chunk, check which chunk it is to see which mode to select
-                            if column >= app.chunks[0].x && column < app.chunks[0].x + app.chunks[0].width && row >= app.chunks[0].y && row < app.chunks[0].y + app.chunks[0].height {
+                            if column >= app.chunks[0].x
+                                && column < app.chunks[0].x + app.chunks[0].width
+                                && row >= app.chunks[0].y
+                                && row < app.chunks[0].y + app.chunks[0].height
+                            {
                                 app.input_mode = InputMode::Normal;
                             }
                         }
@@ -316,50 +330,74 @@ fn run_app<B: Backend>(
                             //                         Cmd + Backspace to delete everything
 
                             // Meta arrow keys
-                            KeyEvent { code: KeyCode::Char('a'), modifiers: KeyModifiers::CONTROL, .. } => {
+                            KeyEvent {
+                                code: KeyCode::Char('a'),
+                                modifiers: KeyModifiers::CONTROL,
+                                ..
+                            } => {
                                 // Handle Cmd+LeftArrow (interpreted as Ctrl+a)
                                 app.input_pos = 0;
-                            },
-                            KeyEvent { code: KeyCode::Char('e'), modifiers: KeyModifiers::CONTROL, .. } => {
+                            }
+                            KeyEvent {
+                                code: KeyCode::Char('e'),
+                                modifiers: KeyModifiers::CONTROL,
+                                ..
+                            } => {
                                 // Handle Cmd+RightArrow (interpreted as Ctrl+e)
                                 app.input_pos = app.input.width() as u64;
-                            },
-                            KeyEvent { code: KeyCode::Char('b'), modifiers: KeyModifiers::ALT, .. } => {
+                            }
+                            KeyEvent {
+                                code: KeyCode::Char('b'),
+                                modifiers: KeyModifiers::ALT,
+                                ..
+                            } => {
                                 // Handle Alt+LeftArrow (interpreted as Ctrl+b)
-                                
+
                                 // Find the first position that has a space (or 0 if it gets to that)
                                 match find_previous_space(&app.input, app.input_pos as usize) {
                                     Some(index) => app.input_pos = (index as u64) + 1,
                                     None => app.input_pos = 0,
                                 }
-
-                            },
-                            KeyEvent { code: KeyCode::Char('f'), modifiers: KeyModifiers::ALT, .. } => {
+                            }
+                            KeyEvent {
+                                code: KeyCode::Char('f'),
+                                modifiers: KeyModifiers::ALT,
+                                ..
+                            } => {
                                 // Handle Alt+RightArrow (interpreted as Alt+f)
-                                
+
                                 // Find the first position that has a space (or the end if it gets to that)
                                 match find_next_space(&app.input, app.input_pos as usize) {
                                     Some(index) => app.input_pos = (index as u64) + 1,
                                     None => app.input_pos = app.input.width() as u64,
                                 }
-                            },
-                            
+                            }
+
                             // Meta Backspaces
-                            KeyEvent { code: KeyCode::Char('u'), modifiers: KeyModifiers::CONTROL, .. } => {
+                            KeyEvent {
+                                code: KeyCode::Char('u'),
+                                modifiers: KeyModifiers::CONTROL,
+                                ..
+                            } => {
                                 // Handle Cmd+Backspace (interpreted as Ctrl+u)
                                 app.input.drain(..);
                                 app.input_pos = 0;
-                            },
-                            KeyEvent { code: KeyCode::Char('w'), modifiers: KeyModifiers::CONTROL, .. } => {
+                            }
+                            KeyEvent {
+                                code: KeyCode::Char('w'),
+                                modifiers: KeyModifiers::CONTROL,
+                                ..
+                            } => {
                                 // Handle Alt+Backspace (interpreted as Ctrl+w)
                                 // @TODO/fix This seems wrong? It should be KeyModifiers::ALT but that doesn't work for some reason...
                                 //           This will probably come back to haunt me.
-                                
+
                                 // Find the first position that has a space (or 0 if it gets to that)
-                                let idx = match find_previous_space(&app.input, app.input_pos as usize) {
-                                    Some(index) => index,
-                                    None => 0,
-                                };
+                                let idx =
+                                    match find_previous_space(&app.input, app.input_pos as usize) {
+                                        Some(index) => index,
+                                        None => 0,
+                                    };
 
                                 if idx == 0 {
                                     app.input.drain(..);
@@ -368,46 +406,70 @@ fn run_app<B: Backend>(
                                     app.input.drain((idx + 1)..app.input_pos as usize);
                                     app.input_pos = (idx + 1) as u64;
                                 }
-
-                            },
+                            }
 
                             // Back to regular single key detections
-                            KeyEvent { code: KeyCode::Enter, .. } | KeyEvent { code: KeyCode::Up, .. } | KeyEvent { code: KeyCode::Down, .. } => {
+                            KeyEvent {
+                                code: KeyCode::Enter,
+                                ..
+                            }
+                            | KeyEvent {
+                                code: KeyCode::Up, ..
+                            }
+                            | KeyEvent {
+                                code: KeyCode::Down,
+                                ..
+                            } => {
                                 app.input_mode = InputMode::Normal;
-                            },
-                            KeyEvent { code: KeyCode::Left, .. } => {
+                            }
+                            KeyEvent {
+                                code: KeyCode::Left,
+                                ..
+                            } => {
                                 if app.input_pos > 0 {
                                     app.input_pos -= 1;
                                 }
-                            },
-                            KeyEvent { code: KeyCode::Right, .. } => {
+                            }
+                            KeyEvent {
+                                code: KeyCode::Right,
+                                ..
+                            } => {
                                 app.input_pos += 1;
                                 if app.input_pos > app.input.width() as u64 {
                                     app.input_pos = app.input.width() as u64;
                                 }
-                            },
-                            KeyEvent { code: KeyCode::Char(c), .. } => {
+                            }
+                            KeyEvent {
+                                code: KeyCode::Char(c),
+                                ..
+                            } => {
                                 app.input.insert(app.input_pos as usize, c);
                                 app.input_pos += 1;
-                            },
-                            KeyEvent { code: KeyCode::Backspace, .. } => {
-                                if app.input_pos > 0 && app.input_pos - 1 < app.input.width() as u64{
+                            }
+                            KeyEvent {
+                                code: KeyCode::Backspace,
+                                ..
+                            } => {
+                                if app.input_pos > 0 && app.input_pos - 1 < app.input.width() as u64
+                                {
                                     app.input.remove((app.input_pos as usize) - 1);
                                     app.input_pos -= 1;
                                 }
-                            },
-                            KeyEvent { code: KeyCode::Esc, .. } => {
+                            }
+                            KeyEvent {
+                                code: KeyCode::Esc, ..
+                            } => {
                                 // Empty the input if nothing is done.
                                 app.input.drain(..);
                                 app.input_pos = 0;
                                 app.items = StatefulList::with_items(app.full_history.to_vec());
                                 app.input_mode = InputMode::Normal;
-                            },
+                            }
                             _ => {}
                         }
                     }
                 }
-            },
+            }
         }
         if last_tick.elapsed() >= tick_rate {
             app.on_tick();
@@ -545,8 +607,7 @@ mod history {
             } else {
                 pattern = std::str::from_utf8(&[10]).unwrap();
             }
-            s
-                .split(pattern) // split on newline for bash and on "\n: " for zsh
+            s.split(pattern) // split on newline for bash and on "\n: " for zsh
                 .map(|line| String::from_utf8(line.as_bytes().to_vec()).unwrap())
                 .collect()
         }
@@ -587,18 +648,17 @@ mod history {
     }
 
     pub fn process_history(history: Vec<u8>, history_type: String) -> History {
-
         // @TODO/improvement I don't like how much I'm passing around zsh/bash, this should become
         // its zsh/bash interfaces built on top of history as a base.
-        if history_type == "zsh"{
+        if history_type == "zsh" {
             return reverse(remove_duplicates(remove_empty(remove_timestamps(
                 History::from_bytes(unmetafy(history), history_type),
-            ))))
+            ))));
         }
-        reverse(remove_duplicates(remove_empty(
-            History::from_bytes(history, history_type),
-        )))
-
+        reverse(remove_duplicates(remove_empty(History::from_bytes(
+            history,
+            history_type,
+        ))))
     }
 
     fn unmetafy(mut bytestring: Vec<u8>) -> Vec<u8> {
@@ -625,15 +685,15 @@ mod history {
         /* The metadata in the .zsh_history file looks like:
          *
          * : 1330648651:0;sudo reboot
-         * 
+         *
          * I strip it in from_bytes() by "\n: " so it better
          * handles multiline commands. So this will only
          * strip by what is left after that parsing:
-         * 
+         *
          * 1330648651:0;sudo reboot
-         * 
+         *
          * So the command it get after parsing is:
-         * 
+         *
          * sudo reboot
          */
         //   : 1330648651:0;sudo reboot
@@ -647,7 +707,7 @@ mod history {
         let first = history.get(0);
         let val = regex_first.replace(first.unwrap(), "").to_owned();
         history[0] = val.to_string();
-        
+
         let regex_rest = Regex::new(r"^\d{10}:\d;").unwrap();
         history
             .iter()
