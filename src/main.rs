@@ -1,5 +1,5 @@
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, MouseEvent, MouseEventKind, MouseButton, KeyEventKind},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, MouseEvent, MouseEventKind, MouseButton, KeyEventKind, KeyModifiers, KeyEvent},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -209,6 +209,27 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn find_previous_space(string: &str, start_index: usize) -> Option<usize> {
+    string.char_indices().rev().find_map(|(idx, ch)| {
+        // idx + 1 != start_index - ignores the immediate next position so it can jump full words.
+        if ch == ' ' && idx < start_index && idx + 1 != start_index {
+            Some(idx)
+        } else {
+            None
+        }
+    })
+}
+
+fn find_next_space(string: &str, start_index: usize) -> Option<usize> {
+    string.char_indices().find_map(|(idx, ch)| {
+        if ch == ' ' && idx >= start_index {
+            Some(idx)
+        } else {
+            None
+        }
+    })
+}
+
 fn run_app<B: Backend>(
     terminal: &mut Terminal<B>,
     mut app: App,
@@ -287,45 +308,101 @@ fn run_app<B: Backend>(
                         _ => {}
                     }
                 } else if let Some(Event::Key(key)) = event {
-                    // @TODO/improvement It would be nice to be able to
-                    // use metacharacters just like in a normal terminal.
-                    // Examples: Opt + Arrows to jump by word
-                    //           Opt + Backspace to delete by word
-                    //           Cmd + Arrows to jump to beginning and end
-                    //           Cmd + Backspace to delete everything
                     if key.kind == KeyEventKind::Press {
-                        match key.code {
-                            KeyCode::Enter | KeyCode::Up | KeyCode::Down => {
+                        match key {
+                            // Metacharacter examples: Opt + Arrows to jump by word
+                            //                         Opt + Backspace to delete by word
+                            //                         Cmd + Arrows to jump to beginning and end
+                            //                         Cmd + Backspace to delete everything
+
+                            // Meta arrow keys
+                            KeyEvent { code: KeyCode::Char('a'), modifiers: KeyModifiers::CONTROL, .. } => {
+                                // Handle Cmd+LeftArrow (interpreted as Ctrl+a)
+                                app.input_pos = 0;
+                            },
+                            KeyEvent { code: KeyCode::Char('e'), modifiers: KeyModifiers::CONTROL, .. } => {
+                                // Handle Cmd+RightArrow (interpreted as Ctrl+e)
+                                app.input_pos = app.input.width() as u64;
+                            },
+                            KeyEvent { code: KeyCode::Char('b'), modifiers: KeyModifiers::ALT, .. } => {
+                                // Handle Alt+LeftArrow (interpreted as Ctrl+b)
+                                
+                                // Find the first position that has a space (or 0 if it gets to that)
+                                match find_previous_space(&app.input, app.input_pos as usize) {
+                                    Some(index) => app.input_pos = (index as u64) + 1,
+                                    None => app.input_pos = 0,
+                                }
+
+                            },
+                            KeyEvent { code: KeyCode::Char('f'), modifiers: KeyModifiers::ALT, .. } => {
+                                // Handle Alt+RightArrow (interpreted as Alt+f)
+                                
+                                // Find the first position that has a space (or the end if it gets to that)
+                                match find_next_space(&app.input, app.input_pos as usize) {
+                                    Some(index) => app.input_pos = (index as u64) + 1,
+                                    None => app.input_pos = app.input.width() as u64,
+                                }
+                            },
+                            
+                            // Meta Backspaces
+                            KeyEvent { code: KeyCode::Char('u'), modifiers: KeyModifiers::CONTROL, .. } => {
+                                // Handle Cmd+Backspace (interpreted as Ctrl+u)
+                                app.input.drain(..);
+                                app.input_pos = 0;
+                            },
+                            KeyEvent { code: KeyCode::Char('w'), modifiers: KeyModifiers::CONTROL, .. } => {
+                                // Handle Alt+Backspace (interpreted as Ctrl+w)
+                                // @TODO/fix This seems wrong? It should be KeyModifiers::ALT but that doesn't work for some reason...
+                                //           This will probably come back to haunt me.
+                                
+                                // Find the first position that has a space (or 0 if it gets to that)
+                                let idx = match find_previous_space(&app.input, app.input_pos as usize) {
+                                    Some(index) => index,
+                                    None => 0,
+                                };
+
+                                if idx == 0 {
+                                    app.input.drain(..);
+                                    app.input_pos = 0;
+                                } else {
+                                    app.input.drain((idx + 1)..app.input_pos as usize);
+                                    app.input_pos = (idx + 1) as u64;
+                                }
+
+                            },
+
+                            // Back to regular single key detections
+                            KeyEvent { code: KeyCode::Enter, .. } | KeyEvent { code: KeyCode::Up, .. } | KeyEvent { code: KeyCode::Down, .. } => {
                                 app.input_mode = InputMode::Normal;
-                            }
-                            KeyCode::Left => {
+                            },
+                            KeyEvent { code: KeyCode::Left, .. } => {
                                 if app.input_pos > 0 {
                                     app.input_pos -= 1;
                                 }
-                            }
-                            KeyCode::Right => {
+                            },
+                            KeyEvent { code: KeyCode::Right, .. } => {
                                 app.input_pos += 1;
                                 if app.input_pos > app.input.width() as u64 {
                                     app.input_pos = app.input.width() as u64;
                                 }
-                            }
-                            KeyCode::Char(c) => {
+                            },
+                            KeyEvent { code: KeyCode::Char(c), .. } => {
                                 app.input.insert(app.input_pos as usize, c);
                                 app.input_pos += 1;
-                            }
-                            KeyCode::Backspace => {
+                            },
+                            KeyEvent { code: KeyCode::Backspace, .. } => {
                                 if app.input_pos > 0 && app.input_pos - 1 < app.input.width() as u64{
                                     app.input.remove((app.input_pos as usize) - 1);
                                     app.input_pos -= 1;
                                 }
-                            }
-                            KeyCode::Esc => {
+                            },
+                            KeyEvent { code: KeyCode::Esc, .. } => {
                                 // Empty the input if nothing is done.
                                 app.input.drain(..);
                                 app.input_pos = 0;
                                 app.items = StatefulList::with_items(app.full_history.to_vec());
                                 app.input_mode = InputMode::Normal;
-                            }
+                            },
                             _ => {}
                         }
                     }
